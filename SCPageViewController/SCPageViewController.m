@@ -13,6 +13,8 @@
 #import "SCEasingFunction.h"
 #import "SCPageLayouterProtocol.h"
 
+#import <pop/POP.h>
+
 
 @interface SCPageViewControllerPageDetails : NSObject
 
@@ -169,21 +171,21 @@
            animated:(BOOL)animated
          completion:(void(^)(void))completion
 {
-    [self setLayouter:layouter animated:animated completion:^{
-        if(completion) {
-            completion();
-        }
-    }];
-    
-    if(!self.scrollView.isRunningAnimation) {
-        if(animated) {
-            [UIView animateWithDuration:self.animationDuration delay:0.0f options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:^{
-                [self navigateToPageAtIndex:pageIndex animated:NO completion:nil];
-            } completion:nil];
-        } else {		
-            [self navigateToPageAtIndex:pageIndex animated:animated completion:nil];
-        }
-    }
+	[self setLayouter:layouter animated:animated completion:^{
+		if(completion) {
+			completion();
+		}
+	}];
+
+  if(!self.scrollView.isRunningAnimation) {
+		if(animated) {
+			[UIView animateWithDuration:self.animationDuration delay:0.0f options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:^{
+				[self navigateToPageAtIndex:pageIndex animated:NO completion:nil];
+			} completion:nil];
+		} else {		
+			[self navigateToPageAtIndex:pageIndex animated:animated completion:nil];
+		}
+  }
 }
 
 - (void)setLayouter:(id<SCPageLayouterProtocol>)layouter
@@ -260,40 +262,60 @@
                      animated:(BOOL)animated
                    completion:(void(^)(void))completion
 {
-    NSUInteger previousCurrentPage = self.currentPage;
-    
-    if(pageIndex >= self.numberOfPages) {
-        return;
-    }
-    
-    CGRect frame = CGRectIntegral([self.layouter finalFrameForPageAtIndex:pageIndex pageViewController:self]);
-    
-    CGPoint offset;
-    if(self.layouter.navigationType == SCPageLayouterNavigationTypeHorizontal) {
-        offset = [self _nextStepOffsetForFrame:frame withVelocity:CGPointMake(-1.0f, 0.0f)];
-        offset.x -= self.layouterContentInset.left;
-    } else {
-        offset = [self _nextStepOffsetForFrame:frame withVelocity:CGPointMake(0.0f, -1.0f)];
-        offset.y -= self.layouterContentInset.top;
-    }
-    
-    offset = CGPointMake((NSInteger)floor(offset.x), (NSInteger)floor(offset.y));
-    
-    void(^animationFinishedBlock)(void) = ^{
-        
-        [self _updateNavigationContraints];
-        [self _tilePages];
-        
-        if(!animated && previousCurrentPage != self.currentPage && [self.delegate respondsToSelector:@selector(pageViewController:didNavigateToPageAtIndex:)]) {
-            [self.delegate pageViewController:self didNavigateToPageAtIndex:pageIndex];
-        }
-        
-        if(completion) {
-            completion();
-        }
+	NSUInteger previousCurrentPage = self.currentPage;
+	
+	if(pageIndex >= self.numberOfPages) {
+		return;
+	}
+	
+	CGRect frame = CGRectIntegral([self.layouter finalFrameForPageAtIndex:pageIndex pageViewController:self]);
+	
+	CGPoint offset;
+	if(self.layouter.navigationType == SCPageLayouterNavigationTypeHorizontal) {
+		offset = [self _nextStepOffsetForFrame:frame withVelocity:CGPointMake(-1.0f, 0.0f)];
+		offset.x -= self.layouterContentInset.left;
+	} else {
+		offset = [self _nextStepOffsetForFrame:frame withVelocity:CGPointMake(0.0f, -1.0f)];
+		offset.y -= self.layouterContentInset.top;
+	}
+	
+	offset = CGPointMake((NSInteger)floor(offset.x), (NSInteger)floor(offset.y));
+
+  if (animated) {
+    POPSpringAnimation *anim = [POPSpringAnimation animation];
+    anim.property = [POPAnimatableProperty propertyWithName:kPOPScrollViewContentOffset];
+    anim.toValue = [NSValue valueWithCGPoint:offset];
+    anim.springBounciness = 4;
+    anim.springSpeed = 10;
+
+    anim.completionBlock = ^(POPAnimation *anim, BOOL finished) {
+      [self _updateNavigationContraints];
+      [self _tilePages];
+
+      if(!animated && previousCurrentPage != self.currentPage && [self.delegate respondsToSelector:@selector(pageViewController:didNavigateToPageAtIndex:)]) {
+        [self.delegate pageViewController:self didNavigateToPageAtIndex:pageIndex];
+      }
+
+      if(completion) {
+        completion();
+      }
     };
-    
-    [self.scrollView setContentOffset:offset easingFunction:self.easingFunction duration:(animated ? self.animationDuration : 0.0f) completion:animationFinishedBlock];
+
+    [self.scrollView pop_addAnimation:anim forKey:@"navigateToPageAtIndex"];
+  }
+  else {
+    [self.scrollView setContentOffset:offset animated:NO];
+    [self _updateNavigationContraints];
+    [self _tilePages];
+
+    if(!animated && previousCurrentPage != self.currentPage && [self.delegate respondsToSelector:@selector(pageViewController:didNavigateToPageAtIndex:)]) {
+      [self.delegate pageViewController:self didNavigateToPageAtIndex:pageIndex];
+    }
+
+    if(completion) {
+      completion();
+    }
+  }
 }
 
 - (NSArray *)loadedViewControllers

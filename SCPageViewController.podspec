@@ -32,4 +32,6 @@ Pod::Spec.new do |s|
   s.frameworks = 'UIKit', 'QuartzCore', 'CoreGraphics', 'Foundation'
 
   s.dependency 'SCScrollView', '~> 1.1'
+  s.dependency 'pop'
+
 end
